@@ -409,20 +409,19 @@ class UnsortedSegmentReductionOp : public OpKernel {
     TensorShape counter_shape;
     counter_shape.AddDim(output_rows);
     Tensor* counter = nullptr;
-    if (requires_counter) OP_REQUIRES_OK(context, context->allocate_temp(DataTypeToEnum<T>::value, counter_shape, counter));
-    auto counter_flat = counter->flat<T>();
+    auto dtype = DataTypeToEnum<T>::value;
+    if (requires_counter) OP_REQUIRES_OK(context, context->allocate_temp(dtype, counter_shape, counter));
+    auto counter_flat = requires_counter ? counter->flat<T>() 
+                                         :Tensor(dtype).flat<T>();
     if (requires_counter) counter_flat.setZero();
-    
     // ---------- reduction
     if (data.NumElements() == 0) {
       return;
     }
-    std::cout << "here" << std::endl;
     const int64 N = segment_flat.dimension(0);
     auto reduction = reduction_functor();
     // leaving conditional statements inside the loop,
     // they're optimized out of the loop by the compiler
-    std::cout << "here2" << std::endl;
     for (int64 i = 0; i < N; ++i) {
       Index j = internal::SubtleMustCopy(segment_flat(i));
       if (drop_negatives && j < 0) continue;
@@ -435,11 +434,9 @@ class UnsortedSegmentReductionOp : public OpKernel {
         counter_flat.template chip<0>(j) += counter_flat.template chip<0>(j).constant(T(1));
       }
     }
-    std::cout << "here3" << std::endl;
     if (requires_counter) {
       terminal_functor()(counter_flat, output_flat);
     }
-    std::cout << "here4" << std::endl;
   }
 
  private:
