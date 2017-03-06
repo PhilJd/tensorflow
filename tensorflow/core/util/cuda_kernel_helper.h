@@ -398,6 +398,17 @@ USE_CUDA_ATOMIC(Add, uint32);
 USE_CUDA_ATOMIC(Add, uint64);
 USE_CUDA_ATOMIC(Add, float);
 
+// Float->Int and back, taken from http://stereopsis.com/radix.html
+static inline uint32 FloatFlip(uint32 f) {
+  uint32 mask = -int32(f >> 31) | 0x80000000;
+  return f ^ mask;
+}
+
+static inline uint32 InvertFloatFlip(uint32 f) {
+  uint32 mask = ((f >> 31) - 1) | 0x80000000;
+  return f ^ mask;
+}
+
 // For atomicMax.
 USE_CUDA_ATOMIC(Max, int32);
 USE_CUDA_ATOMIC(Max, uint32);
@@ -418,6 +429,9 @@ CUDA_ATOMIC_WRAPPER(Max, uint64) {
   return old;
 }
 #endif
+CUDA_ATOMIC_WRAPPER(Max, float) {
+  
+}
 
 // Custom implementation of atomicAdd for double.
 // This implementation is copied from CUDA manual.

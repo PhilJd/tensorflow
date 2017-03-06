@@ -28,6 +28,7 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import gen_array_ops
 from tensorflow.python.ops import gen_math_ops
 from tensorflow.python.ops import math_ops
+from tensorflow.python.ops import clip_ops
 
 
 def _safe_shape_div(x, y):
@@ -225,6 +226,70 @@ def _SegmentMinOrMaxGrad(op, grad, is_sorted):
   else:
     return array_ops.where(is_selected, gathered_grads, zeros), None, None
 
+'''
+def _SegmentMinOrMaxGrad(op, grad, is_sorted):
+  """Gradient for SegmentMin and (unsorted) SegmentMax. They share similar code."""
+  zeros = array_ops.zeros(array_ops.shape(op.inputs[0]),
+                          dtype=op.inputs[0].dtype)
+
+  # Get the number of selected (minimum or maximum) elements in each segment.
+  # NOTE:
+  # This could be simplified if gather also supported dropping negatives.
+  # I wanted to check back with @tensorflow engineers if
+  # this would be desired behavior before implementing this.
+  if is_sorted:
+    non_zero_indices = op.inputs[1]
+  else:
+    non_zero_indices = array_ops.gather(op.inputs[1], array_ops.where(math_ops.greater_equal(op.inputs[1], 0)))
+  # gathered outputs has the same dims as input containing the maximum of the segment.
+  # So unsorted_seg_max([0, 2, 3], [0,0,0]) -> [3, 3, 3]
+  gathered_outputs = array_ops.gather(op.outputs[0], non_zero_indices)
+  is_selected = math_ops.equal(op.inputs[0], gathered_outputs)
+  if is_sorted:
+    num_selected = math_ops.segment_sum(math_ops.cast(is_selected, grad.dtype),
+                                        op.inputs[1])
+  else:
+    num_selected = math_ops.unsorted_segment_sum(math_ops.cast(is_selected, grad.dtype),
+                                                 non_zero_indices, op.inputs[2],
+                                                 op.get_attr("drop_negatives"))
+
+  # Compute the gradient for each segment. The gradient for the ith segment is
+  # divided evenly among the selected elements in that segment.
+  weighted_grads = math_ops.div(grad, num_selected)
+  gathered_grads = array_ops.gather(weighted_grads, non_zero_indices)
+
+  if is_sorted:
+    return array_ops.where(is_selected, gathered_grads, zeros), None
+  else:
+    return array_ops.where(is_selected, gathered_grads, zeros), None, None
+'''
+
+def _UnsortedSegmentMinOrMaxGrad(op, grad):
+  zeros = array_ops.zeros(array_ops.shape(op.inputs[0]),
+                          dtype=op.inputs[0].dtype)
+  # op.inputs[0]  is values, op.inputs[1]  is segment_ids,
+  # op.inputs[2]  is num_segments
+  drop_negatives = op.get_attr("drop_negatives")
+  if drop_negatives:
+    # clip indices to be greater 0 for gather. This adds
+    # exluded ids to segment 0, but is filtered out with logical_and later.
+    clipped_segment_ids = clip_ops.clip_by_value(op.inputs[1], 0, op.inputs[2])
+    is_positive_segment_id = math_ops.greater_equal(op.inputs[1], 0)
+    # gathered_outputs is [max_val(seg0), max_val(seg0), max_val(seg1)]
+    # for seg_ids = [0, 0, 1]
+    gathered_outputs = array_ops.gather(op.outputs[0], clipped_segment_ids)   
+    is_selected_clipped = math_ops.equal(op.inputs[0], gathered_outputs)
+    is_selected = math_ops.logical_and(is_selected_clipped, is_positive_segment_id)
+  else:
+    gathered_outputs = array_ops.gather(op.outputs[0], op.inputs[1])
+    is_selected = math_ops.equal(op.inputs[0], gathered_outputs)
+  num_selected = math_ops.unsorted_segment_sum(math_ops.cast(is_selected, grad.dtype),
+                                               op.inputs[1], op.inputs[2],
+                                               drop_negatives)
+  weighted_grads = math_ops.div(grad, num_selected)
+  gathered_grads = array_ops.gather(weighted_grads, clipped_segment_ids if drop_negatives else op.inputs[1])
+  return array_ops.where(is_selected, gathered_grads, zeros), None, None
+
 
 @ops.RegisterGradient("SegmentMin")
 def _SegmentMinGrad(op, grad):
@@ -246,7 +311,7 @@ def _UnsortedSegmentSumGrad(op, grad):
 
 @ops.RegisterGradient("UnsortedSegmentMax")
 def _UnsortedSegmentMaxGrad(op, grad):
-  return _SegmentMinOrMaxGrad(op, grad, False)
+  return _UnsortedSegmentMinOrMaxGrad(op, grad)
 
 
 @ops.RegisterGradient("Abs")

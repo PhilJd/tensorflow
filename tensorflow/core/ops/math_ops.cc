@@ -1879,8 +1879,107 @@ first dimension.
 
 output: Has same shape as data, except for dimension 0 which
 has size `num_segments`.
+)doc");
+
+REGISTER_OP("UnsortedSegmentMean")
+    .Input("data: T")
+    .Input("segment_ids: Tindices")
+    .Input("num_segments: int32")
+    .Output("output: T")
+    .Attr("T: realnumbertype")
+    .Attr("drop_negatives: bool = False")
+    .Attr("Tindices: {int32,int64}")
+    .SetShapeFn(UnsortedSegmentReductionShapeFn)
+    .Doc(R"doc(
+Computes the mean along segments of a tensor.
+
+Read [the section on
+Segmentation](../../api_docs/python/math_ops.md#segmentation) for an explanation
+of segments.
+
+Computes a tensor such that
+\\(output_i = \frac{\sum_{j...} data[j...]}{N}\\) where `mean` is
+over `j...` such that `segment_ids[j...] == i` and `N` is the total number of
+values summed. Unlike `SegmentMean`, `segment_ids`
+need not be sorted and need not cover all values in the full
+range of valid values.
+
+If the mean is empty for a given segment ID `i`, `output[i] = 0`.
+
+segment_ids: A 1-D tensor whose rank is equal to the rank of `data`'s
+first dimension.
+
+output: Has same shape as data, except for dimension 0 which
+has size `num_segments`.
 
 )doc");
+
+REGISTER_OP("UnsortedSegmentProd")
+    .Input("data: T")
+    .Input("segment_ids: Tindices")
+    .Input("num_segments: int32")
+    .Output("output: T")
+    .Attr("T: realnumbertype")
+    .Attr("drop_negatives: bool = False")
+    .Attr("Tindices: {int32,int64}")
+    .SetShapeFn(UnsortedSegmentReductionShapeFn)
+    .Doc(R"doc(
+Computes the product along segments of a tensor.
+
+Read [the section on
+Segmentation](../../api_docs/python/math_ops.md#segmentation) for an explanation
+of segments.
+
+Computes a tensor such that
+\\(output_i = \prod_{j...} data[j...]\\) where the product is over tuples `j...` such
+that `segment_ids[j...] == i`.
+Unlike `SegmentProd`, `segment_ids`
+need not be sorted and need not cover all values in the full
+range of valid values.
+
+If the product is empty for a given segment ID `i`, `output[i] = 1`.
+
+segment_ids: A 1-D tensor whose rank is equal to the rank of `data`'s
+first dimension.
+
+output: Has same shape as data, except for dimension 0 which
+has size `num_segments`.
+
+)doc");
+
+REGISTER_OP("UnsortedSegmentMin")
+    .Input("data: T")
+    .Input("segment_ids: Tindices")
+    .Input("num_segments: int32")
+    .Output("output: T")
+    .Attr("T: realnumbertype")
+    .Attr("drop_negatives: bool = False")
+    .Attr("Tindices: {int32,int64}")
+    .SetShapeFn(UnsortedSegmentReductionShapeFn)
+    .Doc(R"doc(
+Computes the minimum along segments of a tensor.
+
+Read [the section on
+Segmentation](../../api_docs/python/math_ops.md#segmentation) for an explanation
+of segments.
+
+Computes a tensor such that
+\\(output_i = \min_{j...} data[j...]\\) where the minimum is over tuples `j...` such
+that `segment_ids[j...] == i`.
+Unlike `SegmentMin`, `segment_ids`
+need not be sorted and need not cover all values in the full
+range of valid values.
+
+If the minimum is empty for a given segment ID `i`, `output[i] = numeric_limits<T>::max()`.
+
+segment_ids: A 1-D tensor whose rank is equal to the rank of `data`'s
+first dimension.
+
+output: Has same shape as data, except for dimension 0 which
+has size `num_segments`.
+
+)doc");
+
 REGISTER_OP("SparseSegmentSum")
     .Input("data: T")
     .Input("indices: Tidx")
