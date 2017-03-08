@@ -327,26 +327,31 @@ TEST(MathOpsTest, LinSpace_ShapeFn) {
   INFER_ERROR("Requires num > 0: -1", op, "?;?;?");
 }
 
-TEST(MathOpsTest, UnsortedSegmentSum_ShapeFn) {
-  ShapeInferenceTestOp op("UnsortedSegmentSum");
-  op.input_tensors.resize(3);
-  INFER_OK(op, "?;?;?", "?");
-  INFER_OK(op, "?;[?];?", "?");
-  INFER_ERROR("Shape must be rank 0 but is rank 2", op, "?;?;[1,2]");
-  INFER_ERROR("Dimensions must be equal, but are 2 and 3", op,
-              "[1,?,2];[1,?,3];?");
-  INFER_OK(op, "?;[3];?", "?");
-  INFER_ERROR("Shape must be at least rank 3 but is rank 2", op,
-              "[1,2];[1,2,3];?");
+TEST(MathOpsTest, UnsortedSegment_ShapeFn) {
+  auto ops = {"UnsortedSegmentMax", "UnsortedSegmentMean",
+              "UnsortedSegmentMin", "UnsortedSegmentProd",
+              "UnsortedSegmentSum", "UnsortedSegmentSqrtN"}
+  for (const auto* op_name : ops) {
+    ShapeInferenceTestOp op(op_name);
+    op.input_tensors.resize(3);
+    INFER_OK(op, "?;?;?", "?");
+    INFER_OK(op, "?;[?];?", "?");
+    INFER_ERROR("Shape must be rank 0 but is rank 2", op, "?;?;[1,2]");
+    INFER_ERROR("Dimensions must be equal, but are 2 and 3", op,
+                "[1,?,2];[1,?,3];?");
+    INFER_OK(op, "?;[3];?", "?");
+    INFER_ERROR("Shape must be at least rank 3 but is rank 2", op,
+                "[1,2];[1,2,3];?");
 
-  Tensor num_segments_t = test::AsScalar(100);
-  op.input_tensors[2] = &num_segments_t;
-  INFER_OK(op, "[?,2,3,?,5];[1,2,?];[]", "[100,d0_3,d0_4]");
+    Tensor num_segments_t = test::AsScalar(100);
+    op.input_tensors[2] = &num_segments_t;
+    INFER_OK(op, "[?,2,3,?,5];[1,2,?];[]", "[100,d0_3,d0_4]");
 
-  num_segments_t = test::AsScalar(-1);
-  INFER_ERROR(("Dimension size, given by scalar input 2, must be "
-               "non-negative but is -1"),
-              op, "[3];[3];?");
+    num_segments_t = test::AsScalar(-1);
+    INFER_ERROR(("Dimension size, given by scalar input 2, must be "
+                 "non-negative but is -1"),
+                op, "[3];[3];?");
+  }
 }
 
 TEST(MathOpsTest, SparseSegment_ShapeFn) {
