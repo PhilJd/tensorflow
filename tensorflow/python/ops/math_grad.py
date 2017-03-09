@@ -263,6 +263,11 @@ def _SegmentMinOrMaxGrad(op, grad, is_sorted):
   else:
     return array_ops.where(is_selected, gathered_grads, zeros), None, None
 '''
+def reshape_for_broadcast(x, y):
+  """ reshapes x to be able to multiply x with y using broadcasting """
+  num_dims_to_add = array_ops.rank(y) - array_ops.rank(x)
+  shape = array_ops.concat((array_ops.shape(x), array_ops.ones((num_dims_to_add,), dtype=dtypes.int32)), 0)
+  return array_ops.reshape(x, shape)
 
 def _UnsortedSegmentMinOrMaxGrad(op, grad):
   zeros = array_ops.zeros(array_ops.shape(op.inputs[0]),
@@ -272,14 +277,16 @@ def _UnsortedSegmentMinOrMaxGrad(op, grad):
   drop_negatives = op.get_attr("drop_negatives")
   if drop_negatives:
     # clip indices to be greater 0 for gather. This adds
-    # exluded ids to segment 0, but is filtered out with logical_and later.
+    # exluded ids to segment 0, so we have to remove them later
     clipped_segment_ids = clip_ops.clip_by_value(op.inputs[1], 0, op.inputs[2])
     is_positive_segment_id = math_ops.greater_equal(op.inputs[1], 0)
     # gathered_outputs is [max_val(seg0), max_val(seg0), max_val(seg1)]
     # for seg_ids = [0, 0, 1]
     gathered_outputs = array_ops.gather(op.outputs[0], clipped_segment_ids)   
-    is_selected_clipped = math_ops.equal(op.inputs[0], gathered_outputs)
-    is_selected = math_ops.logical_and(is_selected_clipped, is_positive_segment_id)
+    is_selected = math_ops.equal(op.inputs[0], gathered_outputs)
+    is_positive_segment_id = reshape_for_broadcast(is_positive_segment_id,
+                                                   is_selected)
+    is_selected = math_ops.logical_and(is_selected, is_positive_segment_id)
   else:
     gathered_outputs = array_ops.gather(op.outputs[0], op.inputs[1])
     is_selected = math_ops.equal(op.inputs[0], gathered_outputs)
