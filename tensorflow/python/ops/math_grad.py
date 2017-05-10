@@ -156,6 +156,9 @@ def _ProdGrad(op, grad):
   return array_ops.reshape(out, input_shape), None
 
 
+def _dropping_gather()
+
+
 @ops.RegisterGradient("SegmentSum")
 def _SegmentSumGrad(op, grad):
   """Gradient for SegmentSum."""
@@ -173,7 +176,7 @@ def _SegmentMeanGrad(op, grad):
   ones = array_ops.fill(ones_shape,
                         constant_op.constant(1, dtype=grad.dtype))
   scaled_grad = math_ops.div(grad, math_ops.segment_sum(ones, op.inputs[1]))
-  return array_ops.gather(scaled_grad, op.inputs[1]), None
+  return gen_array_opsps.gather(scaled_grad, op.inputs[1]), None
 
 
 @ops.RegisterGradient("SparseSegmentSum")
@@ -226,43 +229,7 @@ def _SegmentMinOrMaxGrad(op, grad, is_sorted):
   else:
     return array_ops.where(is_selected, gathered_grads, zeros), None, None
 
-'''
-def _SegmentMinOrMaxGrad(op, grad, is_sorted):
-  """Gradient for SegmentMin and (unsorted) SegmentMax. They share similar code."""
-  zeros = array_ops.zeros(array_ops.shape(op.inputs[0]),
-                          dtype=op.inputs[0].dtype)
 
-  # Get the number of selected (minimum or maximum) elements in each segment.
-  # NOTE:
-  # This could be simplified if gather also supported dropping negatives.
-  # I wanted to check back with @tensorflow engineers if
-  # this would be desired behavior before implementing this.
-  if is_sorted:
-    non_zero_indices = op.inputs[1]
-  else:
-    non_zero_indices = array_ops.gather(op.inputs[1], array_ops.where(math_ops.greater_equal(op.inputs[1], 0)))
-  # gathered outputs has the same dims as input containing the maximum of the segment.
-  # So unsorted_seg_max([0, 2, 3], [0,0,0]) -> [3, 3, 3]
-  gathered_outputs = array_ops.gather(op.outputs[0], non_zero_indices)
-  is_selected = math_ops.equal(op.inputs[0], gathered_outputs)
-  if is_sorted:
-    num_selected = math_ops.segment_sum(math_ops.cast(is_selected, grad.dtype),
-                                        op.inputs[1])
-  else:
-    num_selected = math_ops.unsorted_segment_sum(math_ops.cast(is_selected, grad.dtype),
-                                                 non_zero_indices, op.inputs[2],
-                                                 op.get_attr("drop_negatives"))
-
-  # Compute the gradient for each segment. The gradient for the ith segment is
-  # divided evenly among the selected elements in that segment.
-  weighted_grads = math_ops.div(grad, num_selected)
-  gathered_grads = array_ops.gather(weighted_grads, non_zero_indices)
-
-  if is_sorted:
-    return array_ops.where(is_selected, gathered_grads, zeros), None
-  else:
-    return array_ops.where(is_selected, gathered_grads, zeros), None, None
-'''
 def reshape_for_broadcast(x, y):
   """ reshapes x to be able to multiply x with y using broadcasting """
   num_dims_to_add = array_ops.rank(y) - array_ops.rank(x)
@@ -280,8 +247,7 @@ def _UnsortedSegmentMinOrMaxGrad(op, grad):
     # exluded ids to segment 0, so we have to remove them later
     clipped_segment_ids = clip_ops.clip_by_value(op.inputs[1], 0, op.inputs[2])
     is_positive_segment_id = math_ops.greater_equal(op.inputs[1], 0)
-    # gathered_outputs is [max_val(seg0), max_val(seg0), max_val(seg1)]
-    # for seg_ids = [0, 0, 1]
+    # gathered_outputs is [max(seg0), max(seg0), max(seg1)] for ids = [0, 0, 1]
     gathered_outputs = array_ops.gather(op.outputs[0], clipped_segment_ids)   
     is_selected = math_ops.equal(op.inputs[0], gathered_outputs)
     is_positive_segment_id = reshape_for_broadcast(is_positive_segment_id,
@@ -290,9 +256,9 @@ def _UnsortedSegmentMinOrMaxGrad(op, grad):
   else:
     gathered_outputs = array_ops.gather(op.outputs[0], op.inputs[1])
     is_selected = math_ops.equal(op.inputs[0], gathered_outputs)
-  num_selected = math_ops.unsorted_segment_sum(math_ops.cast(is_selected, grad.dtype),
-                                               op.inputs[1], op.inputs[2],
-                                               drop_negatives)
+  num_selected = math_ops.unsorted_segment_sum(
+      math_ops.cast(is_selected, grad.dtype), op.inputs[1], op.inputs[2],
+      drop_negatives)
   weighted_grads = math_ops.div(grad, num_selected)
   gathered_grads = array_ops.gather(weighted_grads, clipped_segment_ids if drop_negatives else op.inputs[1])
   return array_ops.where(is_selected, gathered_grads, zeros), None, None
@@ -319,6 +285,25 @@ def _UnsortedSegmentSumGrad(op, grad):
 @ops.RegisterGradient("UnsortedSegmentMax")
 def _UnsortedSegmentMaxGrad(op, grad):
   return _UnsortedSegmentMinOrMaxGrad(op, grad)
+
+
+@ops.RegisterGradient("UnsortedSegmentMin")
+def _UnsortedSegmentMinGrad(op, grad):
+  return _UnsortedSegmentMinOrMaxGrad(op, grad)
+
+
+@ops.RegisterGradient("UnsortedSegmentMean")
+def _UnsortedSegmentMeanGrad(op, grad):
+  raise NotImplementedError
+
+@ops.RegisterGradient("UnsortedSegmentSqrtN")
+def _UnsortedSegmentSqrtNGrad(op, grad):
+  raise NotImplementedError
+
+
+@ops.RegisterGradient("UnsortedSegmentProd")
+def _UnsortedSegmentProdGrad(op, grad):
+  raise NotImplementedError
 
 
 @ops.RegisterGradient("Abs")

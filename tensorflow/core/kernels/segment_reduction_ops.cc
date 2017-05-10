@@ -351,6 +351,7 @@ REGISTER_COMPLEX_CPU_KERNELS_ALL(complex128);
   REGISTER_GPU_SORTED_KERNELS(type, int32);   \
   REGISTER_GPU_SORTED_KERNELS(type, int64);
 
+<<<<<<< HEAD
 TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_SORTED_KERNELS_ALL);
 #undef REGISTER_GPU_SORTED_KERNELS
 #undef REGISTER_GPU_SORTED_KERNELS_ALL
@@ -359,11 +360,12 @@ TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_SORTED_KERNELS_ALL);
 // ___________________________________________________________________________
 // Unsorted Segment Ops
 
+
 // initial_value is a functor, as float/complex can't appear in template args
-// todo: use std::nullptr_t as void functor and move functors back down
-template <typename Device, class T, class Index, typename initial_value_functor,
-          typename reduction_functor, typename terminal_functor,
-          bool requires_counter = false>
+template <typename Device, class T, class Index, bool requires_counter,
+          template<class> class initial_value_functor,
+          template<class> class reduction_functor,
+          template<class> class terminal_functor>
 class UnsortedSegmentReductionOp : public OpKernel {
  public:
   explicit UnsortedSegmentReductionOp(
@@ -402,28 +404,30 @@ class UnsortedSegmentReductionOp : public OpKernel {
     Tensor* output = nullptr;
     OP_REQUIRES_OK(context, context->allocate_output(0, output_shape, &output));
     auto output_flat = output->flat_outer_dims<T>();
-    output_flat.setConstant(initial_value_functor()());
+    output_flat.setConstant(initial_value_functor<T>()());
     const auto segment_flat = segment_ids.flat<Index>();
-    auto data_flat = data.flat_outer_dims<T>();
     // ---------- if needed, prepare counter tensor
-    TensorShape counter_shape;
-    counter_shape.AddDim(output_rows);
-    Tensor* counter = nullptr;
     auto dtype = DataTypeToEnum<T>::value;
-    if (requires_counter) OP_REQUIRES_OK(context, context->allocate_temp(dtype, counter_shape, counter));
-    auto counter_flat = requires_counter ? counter->flat<T>() 
-                                         :Tensor(dtype).flat<T>();
+    Tensor counter(dtype);
+    if (requires_counter) {
+      OP_REQUIRES_OK(context, context->allocate_temp(dtype, TensorShape({output_rows}), &counter));
+    }
+    auto counter_flat = counter.flat<T>();
     if (requires_counter) counter_flat.setZero();
     // ---------- reduction
     if (data.NumElements() == 0) {
       return;
     }
     const int64 N = segment_flat.dimension(0);
-    auto reduction = reduction_functor();
+    // note: using pointer, as data.flat_inner_dims<T>() segfaults sometimes
+    auto data_ptr = data.template flat<T>().data();
+    auto data_flat = typename TTypes<T, 2>::ConstTensor(data_ptr, N, data.NumElements() / N);
+    auto reduction = reduction_functor<T>();
     // leaving conditional statements inside the loop,
-    // they're optimized out of the loop by the compiler
+    // the compiler optimizes them out of the loop
     for (int64 i = 0; i < N; ++i) {
       Index j = internal::SubtleMustCopy(segment_flat(i));
+
       if (drop_negatives && j < 0) continue;
       OP_REQUIRES(context, FastBoundsCheck(j, output_rows),
                   errors::InvalidArgument(
@@ -431,11 +435,12 @@ class UnsortedSegmentReductionOp : public OpKernel {
                       " = ", j, " is out of range [0, ", output_rows, ")"));
       reduction(data_flat.template chip<0>(i), output_flat.template chip<0>(j));
       if (requires_counter) {
-        counter_flat.template chip<0>(j) += counter_flat.template chip<0>(j).constant(T(1));
+        counter_flat.template chip<0>(j) += counter_flat.constant(T(1));
       }
     }
     if (requires_counter) {
-      terminal_functor()(counter_flat, output_flat);
+
+      terminal_functor<T>()(counter_flat, output_flat);
     }
   }
 
@@ -446,9 +451,12 @@ class UnsortedSegmentReductionOp : public OpKernel {
 namespace functor {
 
 template<typename T>
-using chipT = Eigen::TensorChippingOp<0l, Eigen::TensorMap<Eigen::Tensor<T, 2, 1, long int>, 16, Eigen::MakePointer> >;
+using chip2D = Eigen::TensorChippingOp<0l, Eigen::TensorMap<Eigen::Tensor<T, 2, 1, long int>, 16, Eigen::MakePointer> >;
 template<typename T>
-using constchipT = Eigen::TensorChippingOp<0l, const Eigen::TensorMap<Eigen::Tensor<const T, 2, 1, long int>, 16, Eigen::MakePointer> >;
+using constchip2D = Eigen::TensorChippingOp<0l, const Eigen::TensorMap<Eigen::Tensor<const T, 2, 1, long int>, 16, Eigen::MakePointer> >;
+template<typename T>
+using chip1D = Eigen::TensorChippingOp<0l, Eigen::TensorMap<Eigen::Tensor<T, 1, 1, long int>, 16, Eigen::MakePointer> >;
+
 template<typename T>
 using tensorT = Eigen::TensorMap<Eigen::Tensor<T, 2, 1, long int>, 16, Eigen::MakePointer>;
 template<typename T>
@@ -466,82 +474,104 @@ struct highest { T operator()() const { return std::numeric_limits<T>::max(); } 
 
 template<typename T>
 struct sum {
-  void operator()(const constchipT<T> data, chipT<T> output) {
+  void operator()(const constchip2D<T> data, chip2D<T> output) {
     output += data;
   }
 };
 
 template<typename T>
 struct max {
-  void operator()(const constchipT<T> data, chipT<T> output) {
+  void operator()(const constchip2D<T> data, chip2D<T> output) {
     output = data.cwiseMax(output);
   }
 };
 
 template<typename T>
 struct min {
-  void operator()(const constchipT<T> data, chipT<T> output) {
+  void operator()(const constchip2D<T> data, chip2D<T> output) {
     output = data.cwiseMin(output);
   }
 };
 
 template<typename T>
 struct prod {
-  void operator()(const constchipT<T> data, chipT<T> output) {
+  void operator()(const constchip2D<T> data, chip2D<T> output) {
     output *= data;
   }
 };
 
+
 // terminal functors
+
+template<typename T>
+struct void_ {
+  void operator()(const counterT<T> counter, const tensorT<T> output) {}
+};
+
+// helper function for terminal functors, sets all zero entries in counter to 1
+// to prevent division by 0, reshapes and broadcasts to match the output
+template<typename T>
+void process_counter(counterT<T> counter, const tensorT<T> output) {
+    counter = counter.cwiseMax(counter.constant(T(1))).eval();
+    Eigen::array<int, output.NumDimensions - 1> bcast;
+    for (int i = 1; i < output.NumDimensions; ++i) {
+      bcast[i] = output.dimensions()[i];
+    }
+    Eigen::array<long int, 2> shape({counter.dimensions()[0], 1}); 
+    auto counter_reshaped = counter.reshape(shape).eval();
+    counter = counter_reshaped.broadcast(bcast).eval();
+}
+
 template<typename T>
 struct mean_terminal {
-  void operator()(const counterT<T> counter, tensorT<T> output) {
+  void operator()(counterT<T> counter, tensorT<T> output) {   
+    process_counter<T>(counter, output);
+    std::cout << "here5";
     output /= counter;
   }
 };
 
 template<typename T>
 struct sqrt_n_terminal {
-  void operator()(const counterT<T> counter, tensorT<T> output) {
+  void operator()(counterT<T> counter, tensorT<T> output) {
+    process_counter<T>(counter, output);
     output /= counter.sqrt();
   }
-};
-
-template<typename T>
-struct void_ {
-  void operator()(const counterT<T> counter, tensorT<T> output) { return; }
 };
 
 }  // namespace functor
 
 
-#define REGISTER_CPU_KERNEL_UNSORTEDSEGMENT(name, type, index_type, initial_value, reduction_functor, terminal_functor, requires_counter) \
-  REGISTER_KERNEL_BUILDER(                                           \
-      Name(name)                                                     \
-          .Device(DEVICE_CPU)                                        \
-          .TypeConstraint<type>("T")                                 \
-          .TypeConstraint<index_type>("Tindices"),                   \
-      UnsortedSegmentReductionOp<CPUDevice, type, index_type, initial_value, reduction_functor, terminal_functor, requires_counter>)
+#define REGISTER_CPU_KERNEL_UNSORTEDSEGMENT(name, type, index_type,       \
+    requires_counter, initial_value, reduction_functor, terminal_functor) \
+  REGISTER_KERNEL_BUILDER(                                                \
+      Name(name)                                                          \
+          .Device(DEVICE_CPU)                                             \
+          .TypeConstraint<type>("T")                                      \
+          .TypeConstraint<index_type>("Tindices"),                        \
+      UnsortedSegmentReductionOp<CPUDevice, type, index_type,             \
+                                 requires_counter, initial_value,         \
+                                 reduction_functor, terminal_functor>)
 
-#define REGISTER_REAL_CPU_UNSORTED_KERNELS(type, index_type)                           \
-  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT(                                                \
-      "UnsortedSegmentSum", type, index_type, functor::zero<type>, functor::sum<type>, functor::void_<type>, false);  \
-  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT(       \
-      "UnsortedSegmentMax", type, index_type, functor::lowest<type>, functor::max<type>, functor::void_<type>, false); \
-  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT(       \
-      "UnsortedSegmentMin", type, index_type, functor::highest<type>, functor::min<type>, functor::void_<type>, false); \
-  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT(       \
-      "UnsortedSegmentProd", type, index_type, functor::one<type>, functor::prod<type>, functor::void_<type>, false); \
-  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT(       \
-      "UnsortedSegmentMean", type, index_type, functor::zero<type>, functor::sum<type>, functor::mean_terminal<type>, true); \
-  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT(       \
-      "UnsortedSegmentSqrtN", type, index_type, functor::zero<type>, functor::sum<type>, functor::sqrt_n_terminal<type>, true)
+#define REGISTER_REAL_CPU_UNSORTED_KERNELS(type, index_type)                   \
+  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT("UnsortedSegmentSum", type, index_type,  \
+      false, functor::zero, functor::sum, functor::void_);                     \
+  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT("UnsortedSegmentMax", type, index_type,  \
+      false, functor::lowest, functor::max, functor::void_);                   \
+  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT("UnsortedSegmentMin", type, index_type,  \
+      false, functor::highest, functor::min, functor::void_);                  \
+  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT("UnsortedSegmentProd", type, index_type, \
+      false, functor::one, functor::prod, functor::void_);                     \
+  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT("UnsortedSegmentMean", type, index_type, \
+      true, functor::zero, functor::sum, functor::mean_terminal);              \
+  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT("UnsortedSegmentSqrtN", type,            \
+      index_type, true, functor::zero, functor::sum, functor::sqrt_n_terminal)
 
-#define REGISTER_COMPLEX_CPU_UNSORTED_KERNELS(type, index_type)        \
-  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT(                                                \
-      "UnsortedSegmentSum", type, index_type, functor::zero<type>, functor::sum<type>, functor::void_<type>, false);  \
-  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT(       \
-      "UnsortedSegmentProd", type, index_type, functor::one<type>, functor::prod<type>, functor::void_<type>, false)
+#define REGISTER_COMPLEX_CPU_UNSORTED_KERNELS(type, index_type)                \
+  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT("UnsortedSegmentSum", type, index_type,  \
+      false, functor::zero, functor::sum, functor::void_);                     \
+  REGISTER_CPU_KERNEL_UNSORTEDSEGMENT("UnsortedSegmentProd", type, index_type, \
+      false, functor::one, functor::prod, functor::void_)
 
 
 #define REGISTER_REAL_CPU_UNSORTED_KERNELS_ALL(type) \
@@ -562,7 +592,7 @@ REGISTER_COMPLEX_CPU_UNSORTED_KERNELS_ALL(complex128);
 #undef REGISTER_COMPLEX_CPU_UNSORTED_KERNELS
 #undef REGISTER_COMPLEX_CPU_UNSORTED_KERNELS_ALL
 #undef REGISTER_REAL_CPU_UNSORTED_KERNELS_ALL
-
+/*
 #if GOOGLE_CUDA
 #define REGISTER_GPU_UNSORTED_KERNELS(type, index_type)                \
   REGISTER_KERNEL_BUILDER(Name("UnsortedSegmentSum")                   \
@@ -582,6 +612,7 @@ TF_CALL_complex128(REGISTER_GPU_UNSORTED_KERNELS_ALL);
 #undef REGISTER_GPU_UNSORTED_KERNELS
 #undef REGISTER_GPU_UNSORTED_KERNELS_ALL
 #endif  // GOOGLE_CUDA
+*/
 
 // ___________________________________________________________________________
 // Sparse Segment Ops

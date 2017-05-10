@@ -247,10 +247,23 @@ class SegmentReductionOpTest(SegmentReductionHelper):
 class UnsortedSegmentSumTest(SegmentReductionHelper):
 
   def testValues(self):
+    #print("test Values ({})".format())
     dtypes = [
         dtypes_lib.float32, dtypes_lib.float64, dtypes_lib.int64,
         dtypes_lib.int32, dtypes_lib.complex64, dtypes_lib.complex128
     ]
+    # Each item is np_op1, np_op2, tf_op
+    ops_list = [(np.add, None, math_ops.segment_sum),
+                (self._mean_cum_op, self._mean_reduce_op,
+                 math_ops.segment_mean),
+                (np.ndarray.__mul__, None, math_ops.segment_prod),
+                (np.minimum, None, math_ops.segment_min),
+                (np.maximum, None, math_ops.segment_max)]
+
+    # A subset of ops has been enabled for complex numbers
+    complex_ops_list = [(np.add, None, math_ops.segment_sum),
+                        (np.ndarray.__mul__, None, math_ops.segment_prod)]
+
     indices_flat = np.array([0, 4, 0, 8, 3, 8, 4, 7, 7, 3])
     num_segments = 12
     for indices in indices_flat, indices_flat.reshape(5, 2):

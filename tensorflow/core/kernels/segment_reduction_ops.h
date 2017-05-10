@@ -57,7 +57,7 @@ struct UnsortedSegmentBaseFunctor{
                   const Index output_rows, const TensorShape& segment_ids_shape,
                   typename TTypes<Index>::ConstFlat segment_ids,
                   const Index data_size, const T* data,
-                  typename TTypes<T, 2>::Tensor output, bool drop_negatives){};
+                  typename TTypes<T, 2>::Tensor output){};
 };
 
 // Functor for UnsortedSegmentSumOp.
@@ -75,7 +75,7 @@ struct UnsortedSegmentSumFunctor: public UnsortedSegmentBaseFunctor<Device, T, I
                   const Index output_rows, const TensorShape& segment_ids_shape,
                   typename TTypes<Index>::ConstFlat segment_ids,
                   const Index data_size, const T* data,
-                  typename TTypes<T, 2>::Tensor output, bool drop_negatives);
+                  typename TTypes<T, 2>::Tensor output);
 };
 
 // Functor for UnsortedSegmentMaxOp.
@@ -93,7 +93,7 @@ struct UnsortedSegmentMaxFunctor: public UnsortedSegmentBaseFunctor<Device, T, I
                   const Index output_rows, const TensorShape& segment_ids_shape,
                   typename TTypes<Index>::ConstFlat segment_ids,
                   const Index data_size, const T* data,
-                  typename TTypes<T, 2>::Tensor output, bool drop_negatives);
+                  typename TTypes<T, 2>::Tensor output);
 };
 }  // namespace functor
 }  // namespace tensorflow

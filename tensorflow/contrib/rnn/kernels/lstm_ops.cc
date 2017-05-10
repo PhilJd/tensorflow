@@ -344,7 +344,8 @@ class LSTMBlockCellOp : public OpKernel {
 
     Tensor icfo_tensor;
     OP_REQUIRES_OK(ctx,
-                   ctx->allocate_temp(DataTypeToEnum<T>::v(),
+                   ctx->allocate_temp
+                   (DataTypeToEnum<T>::v(),
                                       TensorShape({batch_size, cell_size * 4}),
                                       &icfo_tensor));
 
