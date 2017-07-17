@@ -87,6 +87,7 @@ py_library(
         "//tensorflow/contrib/recurrent:recurrent_py",
         "//tensorflow/contrib/reduce_slice_ops:reduce_slice_ops_py",
         "//tensorflow/contrib/remote_fused_graph/pylib:remote_fused_graph_ops_py",
+        "//tensorflow/contrib/repeat",
         "//tensorflow/contrib/resampler:resampler_py",
         "//tensorflow/contrib/rnn:rnn_py",
         "//tensorflow/contrib/rpc",

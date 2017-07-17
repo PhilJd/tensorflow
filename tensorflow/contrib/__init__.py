@@ -72,6 +72,7 @@ from tensorflow.contrib import proto
 from tensorflow.contrib import quantization
 from tensorflow.contrib import quantize
 from tensorflow.contrib import reduce_slice_ops
+from tensorflow.contrib import repeat
 from tensorflow.contrib import resampler
 from tensorflow.contrib import rnn
 from tensorflow.contrib import rpc
