@@ -519,7 +519,7 @@ if(WIN32)
     # find all symbols that need to be exported from the dll which is needed
     # to provide the tensorflow c/c++ api in tensorflow.dll.
     # From the static library we create the def file with all symbols that need to
-    # be exported from tensorflow.dll. Because there is a limit of 64K sybmols
+    # be exported from tensorflow.dll. Because there is a limit of 64K symbols
     # that can be exported, we filter the symbols with a python script to the namespaces
     # we need.
     #
