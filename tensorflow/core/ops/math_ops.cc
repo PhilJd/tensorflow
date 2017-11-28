@@ -1814,8 +1814,8 @@ REGISTER_OP("UnsortedSegmentSum")
     .Input("num_segments: int32")
     .Output("output: T")
     .Attr("T: numbertype")
-    .Attr("drop_negatives: bool = False")
     .Attr("Tindices: {int32,int64}")
+    .Attr("drop_negatives: bool = False")
     .SetShapeFn(UnsortedSegmentReductionShapeFn)
     .Doc(R"doc(
 Computes the sum along segments of a tensor.
@@ -1853,8 +1853,8 @@ REGISTER_OP("UnsortedSegmentMax")
     .Input("num_segments: int32")
     .Output("output: T")
     .Attr("T: realnumbertype")
-    .Attr("drop_negatives: bool = False")
     .Attr("Tindices: {int32,int64}")
+    .Attr("drop_negatives: bool = False")
     .SetShapeFn(UnsortedSegmentReductionShapeFn)
     .Doc(R"doc(
 Computes the Max along segments of a tensor.
@@ -1889,8 +1889,8 @@ REGISTER_OP("UnsortedSegmentMean")
     .Input("num_segments: int32")
     .Output("output: T")
     .Attr("T: realnumbertype")
-    .Attr("drop_negatives: bool = False")
     .Attr("Tindices: {int32,int64}")
+    .Attr("drop_negatives: bool = False")
     .SetShapeFn(UnsortedSegmentReductionShapeFn)
     .Doc(R"doc(
 Computes the mean along segments of a tensor.
@@ -1922,8 +1922,8 @@ REGISTER_OP("UnsortedSegmentProd")
     .Input("num_segments: int32")
     .Output("output: T")
     .Attr("T: realnumbertype")
-    .Attr("drop_negatives: bool = False")
     .Attr("Tindices: {int32,int64}")
+    .Attr("drop_negatives: bool = False")
     .SetShapeFn(UnsortedSegmentReductionShapeFn)
     .Doc(R"doc(
 Computes the product along segments of a tensor.
@@ -1933,8 +1933,8 @@ Segmentation](../../api_docs/python/math_ops.md#segmentation) for an explanation
 of segments.
 
 Computes a tensor such that
-\\(output_i = \prod_{j...} data[j...]\\) where the product is over tuples `j...` such
-that `segment_ids[j...] == i`.
+\\(output_i = \prod_{j...} data[j...]\\) where the product is over tuples `j...`
+such that `segment_ids[j...] == i`.
 Unlike `SegmentProd`, `segment_ids`
 need not be sorted and need not cover all values in the full
 range of valid values.
@@ -1955,8 +1955,8 @@ REGISTER_OP("UnsortedSegmentMin")
     .Input("num_segments: int32")
     .Output("output: T")
     .Attr("T: realnumbertype")
-    .Attr("drop_negatives: bool = False")
     .Attr("Tindices: {int32,int64}")
+    .Attr("drop_negatives: bool = False")
     .SetShapeFn(UnsortedSegmentReductionShapeFn)
     .Doc(R"doc(
 Computes the minimum along segments of a tensor.
@@ -1966,13 +1966,46 @@ Segmentation](../../api_docs/python/math_ops.md#segmentation) for an explanation
 of segments.
 
 Computes a tensor such that
-\\(output_i = \min_{j...} data[j...]\\) where the minimum is over tuples `j...` such
-that `segment_ids[j...] == i`.
+\\(output_i = \min_{j...} data[j...]\\) where the minimum is over tuples `j...`
+such that `segment_ids[j...] == i`.
 Unlike `SegmentMin`, `segment_ids`
 need not be sorted and need not cover all values in the full
 range of valid values.
 
-If the minimum is empty for a given segment ID `i`, `output[i] = numeric_limits<T>::max()`.
+If the minimum is empty for a given segment ID `i`,
+`output[i] = numeric_limits<T>::max()`.
+
+segment_ids: A 1-D tensor whose rank is equal to the rank of `data`'s
+first dimension.
+
+output: Has same shape as data, except for dimension 0 which
+has size `num_segments`.
+
+)doc");
+
+REGISTER_OP("UnsortedSegmentSqrtN")
+    .Input("data: T")
+    .Input("segment_ids: Tindices")
+    .Input("num_segments: int32")
+    .Output("output: T")
+    .Attr("T: realnumbertype")
+    .Attr("Tindices: {int32,int64}")
+    .Attr("drop_negatives: bool = False")
+    .SetShapeFn(UnsortedSegmentReductionShapeFn)
+    .Doc(R"doc(
+Computes the sum along segments of a tensor divided by the sqrt of N.
+Read [the section on
+Segmentation](../../api_docs/python/math_ops.md#segmentation) for an explanation
+of segments.
+
+Computes a tensor such that
+\\(output_i = \sum_{j...} data[j...] / \sqrt(n_i)\\) where the sum is over
+tuples `j...` such that `segment_ids[j...] == i`.
+`segment_ids` need not be sorted and need not cover all values in the full
+range of valid values.
+
+If there is no entry for a given segment ID `i`,
+`output[i] = 0`.
 
 segment_ids: A 1-D tensor whose rank is equal to the rank of `data`'s
 first dimension.

@@ -392,13 +392,9 @@ __device__ __host__ inline bool ldg(const bool* address) {
 #define USE_CUDA_ATOMIC(op, T) \
   CUDA_ATOMIC_WRAPPER(op, T) { return atomic##op(address, val); }
 
-// For atomicAdd.
-USE_CUDA_ATOMIC(Add, int32);
-USE_CUDA_ATOMIC(Add, uint32);
-USE_CUDA_ATOMIC(Add, uint64);
-USE_CUDA_ATOMIC(Add, float);
 
-// Float->Int and back, taken from http://stereopsis.com/radix.html
+// Converts float to int such that comparison operations hold.
+// Taken from http://stereopsis.com/radix.html
 static inline uint32 FloatFlip(uint32 f) {
   uint32 mask = -int32(f >> 31) | 0x80000000;
   return f ^ mask;
@@ -429,9 +425,43 @@ CUDA_ATOMIC_WRAPPER(Max, uint64) {
   return old;
 }
 #endif
+
 CUDA_ATOMIC_WRAPPER(Max, float) {
-  
+  uint32 flipped_address = FloatFlip(*address);  // address is uint32
+  return InvertFloatFlip(atomicMax(&flipped_address, val));
 }
+
+// For atomicMin.
+USE_CUDA_ATOMIC(Min, int32);
+USE_CUDA_ATOMIC(Min, uint32);
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 350
+USE_CUDA_ATOMIC(Min, uint64);
+#else
+// The uint64 overload of atomicMin() is only available for __CUDA_ARCH__ >=
+// 350.  If not satisfied, we provide a custom implementation using atomicCAS().
+CUDA_ATOMIC_WRAPPER(Min, uint64) {
+  uint64* address_as_ull = reinterpret_cast<uint64*>(address);
+  uint64 old = *address_as_ull, assumed;
+
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed, min(val, assumed));
+  } while (assumed != old);
+
+  return old;
+}
+#endif
+
+CUDA_ATOMIC_WRAPPER(Min, float) {
+  uint32 flipped_address = FloatFlip(*address);  // address is uint32
+  return InvertFloatFlip(atomicMin(&flipped_address, val));
+}
+
+// For atomicAdd.
+USE_CUDA_ATOMIC(Add, int32);
+USE_CUDA_ATOMIC(Add, uint32);
+USE_CUDA_ATOMIC(Add, uint64);
+USE_CUDA_ATOMIC(Add, float);
 
 // Custom implementation of atomicAdd for double.
 // This implementation is copied from CUDA manual.

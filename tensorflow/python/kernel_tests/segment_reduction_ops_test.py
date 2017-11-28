@@ -395,7 +395,8 @@ class UnsortedSegmentSumTest(SegmentReductionHelper):
           # Replace 8 with -1 in indices
           np.place(indices, indices == 8, [-1])
           s = math_ops.unsorted_segment_sum(
-              data=tf_x, segment_ids=indices, num_segments=num_segments)
+              data=tf_x, segment_ids=indices, num_segments=num_segments,
+              drop_negatives=True)
           tf_ans = s.eval()
         self.assertAllClose(np_ans, tf_ans)
         self.assertShapeEqual(np_ans, s)

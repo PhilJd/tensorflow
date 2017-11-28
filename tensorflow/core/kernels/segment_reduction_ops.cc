@@ -351,7 +351,6 @@ REGISTER_COMPLEX_CPU_KERNELS_ALL(complex128);
   REGISTER_GPU_SORTED_KERNELS(type, int32);   \
   REGISTER_GPU_SORTED_KERNELS(type, int64);
 
-<<<<<<< HEAD
 TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_SORTED_KERNELS_ALL);
 #undef REGISTER_GPU_SORTED_KERNELS
 #undef REGISTER_GPU_SORTED_KERNELS_ALL
@@ -359,7 +358,6 @@ TF_CALL_GPU_NUMBER_TYPES(REGISTER_GPU_SORTED_KERNELS_ALL);
 
 // ___________________________________________________________________________
 // Unsorted Segment Ops
-
 
 // initial_value is a functor, as float/complex can't appear in template args
 template <typename Device, class T, class Index, bool requires_counter,
@@ -379,7 +377,6 @@ class UnsortedSegmentReductionOp : public OpKernel {
     const Tensor& segment_ids = context->input(1);
     const Tensor& num_segments = context->input(2);
     // ----------- run checks
-    // ToDo: add SegmentReductionDoValidation
     OP_REQUIRES(
         context, IsLegacyScalar(num_segments.shape()),
         errors::InvalidArgument("num_segments should be a scalar, not shape ",
@@ -410,7 +407,9 @@ class UnsortedSegmentReductionOp : public OpKernel {
     auto dtype = DataTypeToEnum<T>::value;
     Tensor counter(dtype);
     if (requires_counter) {
-      OP_REQUIRES_OK(context, context->allocate_temp(dtype, TensorShape({output_rows}), &counter));
+      OP_REQUIRES_OK(context, context->allocate_temp(dtype,
+                                                     TensorShape({output_rows}),
+                                                     &counter));
     }
     auto counter_flat = counter.flat<T>();
     if (requires_counter) counter_flat.setZero();
@@ -421,25 +420,26 @@ class UnsortedSegmentReductionOp : public OpKernel {
     const int64 N = segment_flat.dimension(0);
     // note: using pointer, as data.flat_inner_dims<T>() segfaults sometimes
     auto data_ptr = data.template flat<T>().data();
-    auto data_flat = typename TTypes<T, 2>::ConstTensor(data_ptr, N, data.NumElements() / N);
+    auto data_flat = typename TTypes<T, 2>::ConstTensor(data_ptr, N,
+                                                        data.NumElements() / N);
     auto reduction = reduction_functor<T>();
     // leaving conditional statements inside the loop,
     // the compiler optimizes them out of the loop
     for (int64 i = 0; i < N; ++i) {
       Index j = internal::SubtleMustCopy(segment_flat(i));
-
       if (drop_negatives && j < 0) continue;
-      OP_REQUIRES(context, FastBoundsCheck(j, output_rows),
-                  errors::InvalidArgument(
-                      "segment_ids", SliceDebugString(segment_ids.shape(), i),
-                      " = ", j, " is out of range [0, ", output_rows, ")"));
+      if (!drop_negatives) {
+        OP_REQUIRES(context, FastBoundsCheck(j, output_rows),
+                    errors::InvalidArgument(
+                        "segment_ids", SliceDebugString(segment_ids.shape(), i),
+                        " = ", j, " is out of range [0, ", output_rows, ")"));
+      }
       reduction(data_flat.template chip<0>(i), output_flat.template chip<0>(j));
       if (requires_counter) {
         counter_flat.template chip<0>(j) += counter_flat.constant(T(1));
       }
     }
     if (requires_counter) {
-
       terminal_functor<T>()(counter_flat, output_flat);
     }
   }
@@ -502,7 +502,6 @@ struct prod {
 
 
 // terminal functors
-
 template<typename T>
 struct void_ {
   void operator()(const counterT<T> counter, const tensorT<T> output) {}
@@ -517,14 +516,14 @@ void process_counter(counterT<T> counter, const tensorT<T> output) {
     for (int i = 1; i < output.NumDimensions; ++i) {
       bcast[i] = output.dimensions()[i];
     }
-    Eigen::array<long int, 2> shape({counter.dimensions()[0], 1}); 
+    Eigen::array<long int, 2> shape({counter.dimensions()[0], 1});
     auto counter_reshaped = counter.reshape(shape).eval();
     counter = counter_reshaped.broadcast(bcast).eval();
 }
 
 template<typename T>
 struct mean_terminal {
-  void operator()(counterT<T> counter, tensorT<T> output) {   
+  void operator()(counterT<T> counter, tensorT<T> output) {
     process_counter<T>(counter, output);
     std::cout << "here5";
     output /= counter;

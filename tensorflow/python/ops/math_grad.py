@@ -177,7 +177,7 @@ def _SegmentMeanGrad(op, grad):
   ones = array_ops.fill(ones_shape,
                         constant_op.constant(1, dtype=grad.dtype))
   scaled_grad = math_ops.div(grad, math_ops.segment_sum(ones, op.inputs[1]))
-  return gen_array_opsps.gather(scaled_grad, op.inputs[1]), None
+  return gen_array_ops.gather(scaled_grad, op.inputs[1]), None
 
 
 @ops.RegisterGradient("SparseSegmentSum")

@@ -26,7 +26,7 @@ namespace tensorflow {
 
 using GPUDevice = Eigen::GpuDevice;
 
-// Helper for UnusortedSegmentSumCustomKernel that adds value into dest
+// Helper for UnsortedSegmentSumCustomKernel that adds value into dest
 // atomically.
 template <typename T>
 static __device__ __forceinline__ void AccumulateInto(T* dest, const T& value) {
