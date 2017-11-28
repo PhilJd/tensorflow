@@ -156,7 +156,8 @@ def _ProdGrad(op, grad):
   return array_ops.reshape(out, input_shape), None
 
 
-def _dropping_gather()
+# ToDo (Phil)
+#def _dropping_gather()
 
 
 @ops.RegisterGradient("SegmentSum")
