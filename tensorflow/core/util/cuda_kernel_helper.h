@@ -405,6 +405,34 @@ static inline uint32 InvertFloatFlip(uint32 f) {
   return f ^ mask;
 }
 
+template <typename T, typename op, typename int_as_T, typename T_as_int>
+T cuda_atomic_helper_32bit(T* address, T val) {
+  int* address_as_int = reinterpret_cast<int*>(address);
+  int old = *address_as_int, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_int, assumed,
+                    T_as_int(op(val, int_as_T(assumed))));
+  } while (assumed != old);
+  return int_as_T(old);
+}
+
+template <typename T, typename op, typename ull_as_T, typename T_as_ull>
+T cuda_atomic_helper_64bit(T* address, T val) {
+  uint64* address_as_ull = reinterpret_cast<uint64*>(address);
+  uint64 old = *address_as_ull, assumed;
+  do {
+    assumed = old;
+    old = atomicCAS(address_as_ull, assumed,
+                    T_as_ull(op(val, ull_as_T(assumed))));
+  } while (assumed != old);
+  return ull_as_T(old);
+}
+
+// dummy functors to enable templated atomic wrappers on ull and int
+uint64 __ull_as_ull(uint64 x) { return x; }
+int __int_as_int(int x) { return x; }
+
 // For atomicMax.
 USE_CUDA_ATOMIC(Max, int32);
 USE_CUDA_ATOMIC(Max, uint32);
@@ -455,6 +483,40 @@ CUDA_ATOMIC_WRAPPER(Min, uint64) {
 CUDA_ATOMIC_WRAPPER(Min, float) {
   uint32 flipped_address = FloatFlip(*address);  // address is uint32
   return InvertFloatFlip(atomicMin(&flipped_address, val));
+}
+
+// For atomicProd
+
+template<typename T>
+struct prod_op {
+  void operator()(T a, T b) {
+    output *= data;
+  }
+};
+
+CUDA_ATOMIC_WRAPPER(Prod, int32) {
+  return cuda_atomic_helper_32bit<int32, prod_op<int32>,
+                                  __int_as_int, __int_as_int>(address, val);
+}
+
+CUDA_ATOMIC_WRAPPER(Prod, uint32) {
+  return cuda_atomic_helper_32bit<uint32, prod_op<uint32>, __int_as_int, __int_as_int>(
+    address, val);
+}
+
+CUDA_ATOMIC_WRAPPER(Prod, float) {
+  return cuda_atomic_helper_32bit<float, prod_op<float>, __int_as_float, __float_as_int>(
+    address, val);
+}
+
+CUDA_ATOMIC_WRAPPER(Prod, uint64) {
+  return cuda_atomic_helper_64bit<uint64, prod_op<uint64>, __ull_as_ull, __ull_as_ull>(
+    address, val);
+}
+
+CUDA_ATOMIC_WRAPPER(Prod, double) {
+  return cuda_atomic_helper_64bit<double, prod_op<double>, __longlong_as_double,
+                                  __double_as_longlong>(address, val);
 }
 
 // For atomicAdd.

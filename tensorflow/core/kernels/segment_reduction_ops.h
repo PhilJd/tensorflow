@@ -20,6 +20,7 @@ limitations under the License.
 #include "tensorflow/core/framework/tensor.h"
 #include "tensorflow/core/framework/tensor_shape.h"
 #include "tensorflow/core/framework/tensor_types.h"
+#include "tensorflow/core/framework/op_kernel.h"
 
 namespace tensorflow {
 
@@ -47,6 +48,22 @@ struct SegmentSumFunctor {
                   typename TTypes<T, 2>::Tensor output);
 };
 #endif
+
+
+template <typename Device, class T, class Index, bool requires_counter,
+          template<class> class initial_value_functor,
+          template<class> class reduction_functor,
+          template<class> class terminal_functor>
+class UnsortedSegmentReductionOp : public OpKernel {
+ public:
+  explicit UnsortedSegmentReductionOp(
+      OpKernelConstruction* context) : OpKernel(context);
+
+  void Compute(OpKernelContext* context) override;
+
+ private:
+  bool drop_negatives;
+};
 
 // BaseFunctor for definition of UnsorteSegmentReductionOp
 // for usage without templates.

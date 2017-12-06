@@ -54,6 +54,45 @@ __device__ __forceinline__ void AccumulateInto(
   CudaAtomicAdd(dest_scalar + 1, value.imag());
 }
 
+// Helper to set all tensor entries to a specific value.
+template <typename T>
+__global__ void SetToValue(const int nthreads, T* bottom_diff, T value) {
+  CUDA_1D_KERNEL_LOOP(index, nthreads) { *(bottom_diff + index) = value; }
+}
+
+
+namespace functor {
+
+template <typename T>
+struct max_gpu_op {
+  __device__ __forceinline__ T operator()(T* dest, const T& value) {
+    CudaAtomicMax(dest, value);
+  }
+}
+
+template <typename T>
+struct min_gpu_op {
+  __device__ __forceinline__ T operator()(T* dest, const T& value) {
+    CudaAtomicMin(dest, value);
+  }
+}
+
+template <typename T>
+struct sum_gpu_op {
+  __device__ __forceinline__ T operator()(T* dest, const T& value) {
+    CudaAtomicAdd(dest, value);
+  }
+}
+
+template <typename T>
+struct prod_gpu_op {
+  __device__ __forceinline__ T operator()(T* dest, const T& value) {
+    CudaAtomicProd(dest, value);
+  }
+}
+
+}  // namespace functor
+
 // SortedSegmentSumFunctor kernel reduces input data just as
 // UnsortedSegmentSumCustomKernel does except that input data
 // is partitioned along the outer reduction dimension. This is
@@ -128,8 +167,8 @@ __global__ void SortedSegmentSumCustomKernel(const Index input_outer_dim_size,
 // UnsortedSegmentSumFunctor kernel processes 'input_total_size' elements.
 // Each element is mapped from input to output by a combination of its
 // 'segment_ids' mapping and 'inner_dim_size'.
-template <typename T, typename Index>
-__global__ void UnsortedSegmentSumCustomKernel(
+template <typename T, typename Index, template<class> class functor>
+__global__ void UnsortedSegmentCustomKernel(
     const Index input_outer_dim_size, const Index inner_dim_size,
     const Index output_outer_dim_size, const Index* segment_ids, const T* input,
     T* output) {
@@ -223,7 +262,7 @@ struct UnsortedSegmentSumFunctor<GPUDevice, T, Index>: UnsortedSegmentBaseFuncto
     config = GetCudaLaunchConfig(input_total_size, d);
     UnsortedSegmentSumCustomKernel<
         T,
-        Index><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
+        Index, ><<<config.block_count, config.thread_per_block, 0, d.stream()>>>(
         input_outer_dim_size, input_inner_dim_size, output_rows,
         segment_ids.data(), data, output.data());
   }
