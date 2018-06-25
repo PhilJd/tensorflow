@@ -17,10 +17,8 @@ limitations under the License.
 #define TENSORFLOW_FRAMEWORK_VARIANT_H_
 
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
 
 #include "tensorflow/core/framework/tensor.pb.h"  // TODO(b/62899350): Remove
